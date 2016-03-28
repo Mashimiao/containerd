@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/containerd/specs"
@@ -83,7 +84,7 @@ func NewStdio(stdin, stdout, stderr string) Stdio {
 }
 
 // New returns a new container
-func New(root, id, bundle, runtimeName string, runtimeArgs, labels []string) (Container, error) {
+func New(root, id, bundle, runtimeName string, runtimeArgs, labels []string, timeout time.Duration) (Container, error) {
 	c := &container{
 		root:        root,
 		id:          id,
@@ -92,6 +93,7 @@ func New(root, id, bundle, runtimeName string, runtimeArgs, labels []string) (Co
 		processes:   make(map[string]*process),
 		runtime:     runtimeName,
 		runtimeArgs: runtimeArgs,
+		timeout:     timeout,
 	}
 	if err := os.Mkdir(filepath.Join(root, id), 0755); err != nil {
 		return nil, err
@@ -177,6 +179,7 @@ type container struct {
 	processes   map[string]*process
 	labels      []string
 	oomFds      []int
+	timeout     time.Duration
 }
 
 func (c *container) ID() string {
@@ -206,7 +209,9 @@ func (c *container) readSpec() (*specs.Spec, error) {
 
 func (c *container) Delete() error {
 	err := os.RemoveAll(filepath.Join(c.root, c.id))
-	exec.Command(c.runtime, "delete", c.id).Run()
+	if derr := exec.Command(c.runtime, "delete", c.id).Run(); err == nil {
+		err = derr
+	}
 	return err
 }
 
